@@ -1,0 +1,31 @@
+[project]
+name = "claas-stone-detection"
+version = "0.1.0"
+description = "Prototype pipeline for early stone detection in harvester headers using microphone and machine sensor data."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Michael Olaitan Ibitoye", email = "michaelibitoye.acad@gmail.com"},
+]
+dependencies = [
+    "asammdf",
+    "numpy",
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
