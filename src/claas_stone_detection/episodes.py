@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from claas_stone_detection.schema import DEFAULT_SCHEMA, ChannelSchema
@@ -59,43 +60,36 @@ def extract_header_on_episodes(
     times = df.index.to_numpy(dtype=float)
     max_time = float(times[-1])
 
+    state = header_on.astype(int)
+    previous_state = state.shift(fill_value=0)
+    transitions = state - previous_state
+
+    starts = df.index[transitions == 1].to_numpy(dtype=float)
+    ends = df.index[transitions == -1].to_numpy(dtype=float)
+
+    if bool(header_on.iloc[0]):
+        starts = np.insert(starts, 0, times[0])
+
+    if bool(header_on.iloc[-1]):
+        ends = np.append(ends, times[-1])
+
     episodes: list[Episode] = []
-    in_episode = False
-    start_time: float | None = None
 
-    for time_s, is_on in zip(times, header_on):
-        time_s = float(time_s)
+    for start_time, end_time in zip(starts, ends):
+        start_time = float(start_time)
+        end_time = float(end_time)
 
-        if is_on and not in_episode:
-            start_time = time_s
-            in_episode = True
+        if end_time - start_time < min_duration_s:
+            continue
 
-        elif not is_on and in_episode:
-            end_time = time_s
+        extended_end_time = min(end_time + grace_s, max_time)
 
-            if start_time is not None and end_time - start_time >= min_duration_s:
-                extended_end_time = min(end_time + grace_s, max_time)
-                episodes.append(
-                    Episode(
-                        start_time=start_time,
-                        end_time=end_time,
-                        extended_end_time=extended_end_time,
-                    )
-                )
-
-            start_time = None
-            in_episode = False
-
-    if in_episode and start_time is not None:
-        end_time = max_time
-
-        if end_time - start_time >= min_duration_s:
-            episodes.append(
-                Episode(
-                    start_time=start_time,
-                    end_time=end_time,
-                    extended_end_time=end_time,
-                )
+        episodes.append(
+            Episode(
+                start_time=start_time,
+                end_time=end_time,
+                extended_end_time=extended_end_time,
             )
+        )
 
     return episodes
