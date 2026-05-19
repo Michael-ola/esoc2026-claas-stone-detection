@@ -4,28 +4,37 @@ Prototype pipeline for early stone detection in harvester headers using micropho
 
 This repository contains solution work for the 2026 GC.OS European Summer of Code CLAAS challenge: **Embedded AI for Predictive Sensor Systems in Agriculture 4.0**.
 
+The project is organized around reusable engineering components rather than task-specific folders. Task 1 builds the shared data-loading interface. Task 2 reuses that interface for modeling and evaluation. Bonus 1 generates additional data in the same format. Bonus 2 reuses the Task 2 pipeline and exports a constrained Random Forest as a microcontroller artefact.
+
+---
+
 ## Problem overview
 
 The challenge focuses on detecting stones entering the header of an agricultural harvester. The provided experiment used microphone recordings and machine sensor channels during harvesting runs. Metallic stones were used as proxy stone events because the metal detector provides a voltage spike that can be used as a reference event signal.
 
-The long-term objective is to investigate whether the microphone signal can detect stone uptake early, potentially before the metal detector response, while keeping false detections low during normal operation.
+The long-term goal is to investigate whether the microphone signal, together with operating context such as vehicle speed and cut length, can detect stone uptake early while keeping false detections low during normal operation.
+
+---
 
 ## Current status
 
-This repository currently implements:
+Implemented:
 
-- **Task 1: data loading**
-- **Task 2: baseline early stone-detection model**
+- **Task 1:** MF4 data loading into reusable `pandas.DataFrame` structures.
+- **Task 2:** Random Forest early-detection baseline with grouped run-level validation.
+- **Bonus 1:** Synthetic CLAAS-like data generation and Random Forest evaluation on 100 generated runs.
+- **Bonus 2:** Microcontroller-oriented constrained Random Forest export artefacts.
+- **2D CNN:** In progress. Spectrogram utilities and a compact CNN model scaffold exist, but the CNN training/evaluation workflow is not finalized.
 
-The current Task 2 pipeline is a complete, testable baseline rather than a final deployable model. It includes reference event extraction, live-style windowing, feature extraction, early-warning labels, a Random Forest classifier, grouped cross-validation, threshold sweeps, and false-alarm analysis.
+---
 
 ## Expected data
 
-The dataset is provided separately through the private ESoC CLAAS challenge repository and is not redistributed here.
+The real challenge dataset is provided separately through the private ESoC CLAAS challenge repository and is not redistributed here.
 
-This repository intentionally does **not** commit the `.mf4` or `.wav` files, in order to respect the confidentiality and redistribution restrictions of the challenge dataset.
+This repository intentionally does **not** commit `.mf4`, `.wav`, or generated synthetic CSV datasets.
 
-By default, scripts expect the `.mf4` files to be available locally in:
+By default, real-data scripts expect the challenge `.mf4` files locally in:
 
 ```text
 data/
@@ -42,56 +51,18 @@ data/
 └── Messung_2025-10-01_17-18-12.mf4
 ```
 
-The `data/` directory is ignored by Git, except for `data/.gitkeep`.
+The `data/` directory is ignored by Git except for `data/.gitkeep`.
 
-## Reviewer quickstart
-
-A reviewer who already has access to the private ESoC CLAAS challenge repository can run this solution without editing the code.
-
-### Option 1: Place the data locally in this repository
-
-Copy or place the challenge `.mf4` files into this repository's ignored `data/` directory:
+Generated synthetic datasets are also ignored by Git:
 
 ```text
-data/
-├── Messung_2025-05-09_08-59-34.mf4
-├── Messung_2025-05-14_16-02-23.mf4
-├── Messung_2025-05-20_16-30-26.mf4
-├── Messung_2025-10-01_09-42-16.mf4
-└── Messung_2025-10-01_17-18-12.mf4
+/synthetic_data/
+/synthetic_data_test/
 ```
 
-Then run:
+The source-code package `src/claas_stone_detection/synthetic_data/` is **not** ignored.
 
-```bash
-python scripts/inspect_data.py --raster 0.001
-python scripts/audit_reference_events.py --raster 0.001
-python scripts/run_baseline.py --raster 0.001 --window-s 0.5 --hop-s 0.1
-```
-
-### Option 2: Pass the original challenge data directory
-
-If this repository and the original challenge repository are side by side, for example:
-
-```text
-projects/
-├── esoc2026-challenge-claas/
-│   └── data/
-└── ESOC-CLAAS-2026/
-    ├── scripts/
-    ├── src/
-    └── README.md
-```
-
-then run:
-
-```bash
-python scripts/inspect_data.py --data-dir ../esoc2026-challenge-claas/data --raster 0.001
-python scripts/audit_reference_events.py --data-dir ../esoc2026-challenge-claas/data --raster 0.001
-python scripts/run_baseline.py --data-dir ../esoc2026-challenge-claas/data --raster 0.001 --window-s 0.5 --hop-s 0.1
-```
-
-This avoids copying the dataset into this repository.
+---
 
 ## Installation
 
@@ -101,61 +72,159 @@ Create and activate a virtual environment, then install the project in editable 
 python -m pip install -e ".[dev]"
 ```
 
-The project was developed and tested with Python 3.11.
+The project was developed with Python 3.11.
+
+Run checks:
+
+```bash
+python -m pytest
+ruff check .
+```
+
+---
 
 ## Project structure
 
 ```text
-ESOC-CLAAS-2026/
-├── data/                         # Local private challenge data, ignored by Git
+ESoC-CLAAS-2026/
+├── artifacts/
+│   └── mcu_random_forest/
+│       ├── README.md
+│       ├── claas_stone_rf_mcu.h
+│       ├── claas_stone_rf_mcu.json
+│       └── feature_order.txt
+├── data/
+│   └── .gitkeep
 ├── scripts/
-│   ├── audit_reference_events.py  # Audits reference voltage events
-│   ├── inspect_data.py            # Inspects loaded MF4 files
-│   ├── inspect_events.py          # Inspects candidate voltage events
-│   └── run_baseline.py            # Runs the Task 2 Random Forest baseline
+│   ├── audit_reference_events.py
+│   ├── export_mcu_random_forest.py
+│   ├── generate_synthetic_dataset.py
+│   ├── inspect_data.py
+│   ├── inspect_events.py
+│   ├── run_baseline.py
+│   └── run_synthetic_baseline.py
 ├── src/
 │   └── claas_stone_detection/
 │       ├── core/
-│       │   ├── preprocessing.py   # Status/HeaderOn normalization
-│       │   ├── schema.py          # Channel names and derived columns
-│       │   └── validation.py      # DataFrame validation checks
+│       │   ├── preprocessing.py
+│       │   ├── schema.py
+│       │   └── validation.py
 │       ├── data/
-│       │   └── io.py              # MF4 reading and dataset loading
+│       │   ├── io.py
+│       │   └── synthetic_io.py
+│       ├── edge/
+│       │   └── random_forest_export.py
 │       ├── evaluation/
-│       │   └── metrics.py         # Detection matching and evaluation metrics
+│       │   └── metrics.py
 │       ├── models/
-│       │   └── baseline.py        # Random Forest baseline model
+│       │   ├── baseline.py
+│       │   └── cnn2d.py
+│       ├── pipelines/
+│       │   └── baseline_pipeline.py
 │       ├── reference/
-│       │   ├── episodes.py        # Header-on episode extraction
-│       │   ├── events.py          # Reference voltage event detection
-│       │   └── labels.py          # Early-detection window labeling
-│       └── streaming/
-│           ├── features.py        # Window-level and temporal features
-│           └── windowing.py       # Live-style sliding windows
-├── tests/                         # Unit and integration tests
-├── pyproject.toml                 # Project metadata and dependencies
+│       │   ├── episodes.py
+│       │   ├── events.py
+│       │   └── labels.py
+│       ├── spectrograms/
+│       │   └── dataset.py
+│       ├── streaming/
+│       │   ├── features.py
+│       │   └── windowing.py
+│       └── synthetic_data/
+│           └── generator.py
+├── tests/
+│   ├── test_baseline.py
+│   ├── test_baseline_pipeline.py
+│   ├── test_cnn2d.py
+│   ├── test_episodes.py
+│   ├── test_events.py
+│   ├── test_features.py
+│   ├── test_io.py
+│   ├── test_labels.py
+│   ├── test_metrics.py
+│   ├── test_preprocessing.py
+│   ├── test_random_forest_export.py
+│   ├── test_schema.py
+│   ├── test_spectrogram_dataset.py
+│   ├── test_synthetic_generator.py
+│   ├── test_synthetic_io.py
+│   ├── test_validation.py
+│   └── test_windowing.py
+├── pyproject.toml
 └── README.md
 ```
 
-## Running tests and linting
+---
 
-Run all tests:
+## Design principle: reuse instead of rebuilding
 
-```bash
-python -m pytest
+The repository intentionally separates concerns by responsibility, not by task number.
+
+```text
+Task 1
+→ core/
+→ data/io.py
+
+Task 2
+→ reference/
+→ streaming/
+→ models/baseline.py
+→ evaluation/
+→ pipelines/baseline_pipeline.py
+
+Bonus 1
+→ synthetic_data/generator.py
+→ data/synthetic_io.py
+→ the same Task 2 pipeline
+
+Bonus 2
+→ edge/random_forest_export.py
+→ the same Task 2 feature/model pipeline
 ```
 
-Run code quality checks:
+This prevents each challenge section from becoming a separate mini-project. Bonus 1 and Bonus 2 reuse the same data format, windowing, labeling, feature extraction, model training, and evaluation logic developed for Task 2.
 
-```bash
-ruff check .
+---
+
+## Loaded DataFrame format
+
+Each real or synthetic run is represented as a time-indexed `pandas.DataFrame`.
+
+Expected columns:
+
+| Column | Description |
+|---|---|
+| `Sensor1` | Microphone/audio signal from the header |
+| `VehicleSpeed` | Harvester speed |
+| `CutLength` | Header cut length setting |
+| `VoltageSignal` | Metal detector voltage signal or synthetic reference voltage |
+| `Status` | Header status channel |
+| `HeaderOn` | Boolean header-on state derived from `Status` or generated directly |
+
+The common interface is:
+
+```python
+dict[str, pandas.DataFrame]
 ```
 
-The unit tests can run without the private dataset. Integration tests that require real `.mf4` files are skipped automatically if no data files are found in the local `data/` directory.
+where each key is a run name and each value is one loaded run.
 
-## Task 1: Data loading
+This interface is used by both real-data and synthetic-data pipelines.
 
-The data loading layer reads CLAAS `.mf4` measurement files using `asammdf` and returns time-indexed `pandas.DataFrame` objects.
+---
+
+## Task 1: data loading
+
+The Task 1 loader reads CLAAS `.mf4` measurement files using `asammdf`.
+
+Implemented:
+
+- MF4 loading with configurable raster sampling.
+- Required channel extraction.
+- Time-indexed DataFrame output.
+- Status normalization into `HeaderOn`.
+- Schema and validation utilities.
+- Tests for schema, preprocessing, validation, and MF4 loading.
 
 Example:
 
@@ -163,49 +232,9 @@ Example:
 from claas_stone_detection.data.io import read_dataset
 
 dataset = read_dataset("data", raster=0.001)
-print(dataset.keys())
 ```
 
-The returned object is a dictionary:
-
-```text
-{
-    "run_name": pandas.DataFrame,
-    ...
-}
-```
-
-Each DataFrame is indexed by time in seconds.
-
-### Loaded DataFrame format
-
-The raw channels are:
-
-| Column | Description |
-|---|---|
-| `Sensor1` | Microphone/audio signal from the header |
-| `VehicleSpeed` | Harvester speed |
-| `CutLength` | Header cut length setting |
-| `VoltageSignal` | Metal detector voltage signal |
-| `Status` | Raw header status channel |
-
-The loader also adds:
-
-| Column | Description |
-|---|---|
-| `HeaderOn` | Boolean column derived from `Status` |
-
-The raw `Status` channel is preserved. `HeaderOn` is added because the actual MF4 files expose status values such as `b"On"` and `b"Off"` rather than only numeric `1` and `0`.
-
-### Inspecting the data
-
-Run the inspection script using the default local `data/` directory:
-
-```bash
-python scripts/inspect_data.py
-```
-
-For faster inspection, use optional resampling:
+Inspect loaded data:
 
 ```bash
 python scripts/inspect_data.py --raster 0.001
@@ -217,164 +246,28 @@ Use a custom data directory:
 python scripts/inspect_data.py --data-dir /path/to/challenge/data --raster 0.001
 ```
 
-## Task 2: Early stone-detection baseline
+---
 
-The Task 2 pipeline builds a live-style early-warning model from the microphone and machine sensor signals.
+## Task 2: Random Forest early-detection baseline
 
-The baseline flow is:
+Task 2 implements a complete baseline for live-style early stone detection.
 
-```text
-MF4 files
-→ loaded DataFrames
-→ HeaderOn episodes
-→ deduplicated reference voltage events
-→ live-style sliding windows
-→ window-level features
-→ temporal delta features
-→ early-warning labels
-→ Random Forest baseline
-→ GroupKFold evaluation by run
-→ threshold sweep and false-alarm analysis
-```
+Implemented:
 
-## Reference event detection
+- Header-on episode extraction.
+- Reference voltage event detection.
+- Reference event deduplication.
+- Early-detection window labeling.
+- Sliding-window feature extraction.
+- Temporal delta features.
+- Random Forest baseline model.
+- Grouped cross-validation by measurement run.
+- Threshold sweep evaluation.
+- Consensus alarm filtering.
+- False-alarm interval reporting.
+- Reference event audit tooling.
 
-Reference events are inferred from the metal detector `VoltageSignal`.
-
-The pipeline:
-
-1. Extracts continuous `HeaderOn` operating episodes.
-2. Extends each episode by a short grace period after shutdown.
-3. Searches for high-voltage regions inside each extended episode.
-4. Uses an episode-local quantile threshold.
-5. Groups nearby high-voltage samples into candidate event regions.
-6. Stores the voltage peak time, peak voltage, local threshold, and associated episode metadata.
-7. Deduplicates repeated detections of the same physical voltage peak.
-
-Deduplication is important because the same voltage peak can be detected through overlapping or extended episode regions. After deduplication, the current reference set contains 28 reference voltage events.
-
-Audit reference events with:
-
-```bash
-python scripts/audit_reference_events.py --raster 0.001 --event-threshold-quantile 0.999 --min-ratio 1.10
-```
-
-The audit reports:
-
-- Number of header-on episodes.
-- Number of reference voltage events.
-- Peak voltage.
-- Local detection threshold.
-- Peak-to-threshold ratio.
-- Whether the event peak occurred inside the `HeaderOn` episode.
-- Weakest reference events.
-
-## Reference event format
-
-Reference voltage events are represented by the `StoneEvent` dataclass.
-
-Each `StoneEvent` stores:
-
-- Measurement run name.
-- Above-threshold event start time.
-- Voltage peak time.
-- Above-threshold event end time.
-- Peak voltage.
-- Local adaptive threshold.
-- Associated header-on episode start and end time.
-- Event source channel.
-
-Event strength can be inspected using:
-
-```text
-peak_to_threshold_ratio = peak_voltage / threshold
-```
-
-The event extraction should be treated as a candidate/reference event layer, not as perfect ground truth. Conservative settings can focus on stronger voltage events, while more sensitive settings can include weaker candidate events for analysis.
-
-## Live-style windowing
-
-The baseline creates streaming-style windows over the signal instead of randomly sampling individual rows.
-
-Default window settings:
-
-```text
-window_s = 0.5
-hop_s = 0.1
-window_region = header-on
-```
-
-By default, model input windows are created only during active `HeaderOn` operation. This avoids training and evaluating the model on post-header shutdown or grace-period audio.
-
-The extended region can still be tested experimentally:
-
-```bash
-python scripts/run_baseline.py --window-region extended
-```
-
-Each window stores:
-
-- Run name.
-- Window start time.
-- Window end time.
-- Detection time.
-- Integer start index.
-- Integer end index.
-
-The integer indexes are used for fast `iloc` slicing on large high-frequency time-series data.
-
-## Feature extraction
-
-The baseline extracts compact features from each live-style window.
-
-Feature groups include:
-
-- Time-domain audio statistics.
-- RMS and peak amplitude.
-- Crest factor.
-- Zero-crossing rate.
-- Frequency-domain band energies.
-- Spectral centroid.
-- Spectral bandwidth.
-- High-frequency energy ratio.
-- Vehicle speed statistics.
-- Cut length statistics.
-- Temporal delta features between consecutive windows.
-
-Temporal delta features are computed within each measurement run only, so information does not leak across runs.
-
-## Window labeling
-
-The model is trained for early detection.
-
-Labels are assigned as:
-
-```text
-1   positive early-warning window
-0   normal negative window
--1  ignored ambiguous window
-```
-
-Default label settings:
-
-```text
-positive_horizon_s = 1.0
-post_event_exclusion_s = 1.0
-```
-
-A window is positive if its detection time is before a reference event and within the positive horizon. Windows immediately after reference events are ignored to avoid shutdown or post-impact contamination.
-
-## Baseline model
-
-The current model is a Random Forest classifier trained on engineered sliding-window features.
-
-Run the default baseline:
-
-```bash
-python scripts/run_baseline.py
-```
-
-Recommended explicit command:
+Run the default real-data baseline:
 
 ```bash
 python scripts/run_baseline.py --raster 0.001 --window-s 0.5 --hop-s 0.1
@@ -390,7 +283,97 @@ score_threshold = 0.10
 consensus = 1 of 1
 ```
 
-The script performs grouped cross-validation by measurement run using `GroupKFold`. This prevents leakage from overlapping windows in the same run.
+The script uses grouped cross-validation by measurement run. With five real runs, each fold trains on four complete runs and validates on one held-out run. This avoids leakage from overlapping sliding windows.
+
+### Current real-data baseline result
+
+Using the default Task 2 configuration:
+
+```text
+Reference events: 28
+Detected events: 12/28
+True positive rate: 0.429
+False detections/hour: 307.441
+Mean seconds between false detections: 11.710 s
+Average advance time: 0.697 s
+```
+
+This is not deployment-ready. The seconds-per-false-detection value makes the limitation clear: one false alarm roughly every 11.7 seconds is operationally unacceptable. However, the result shows that the pipeline can detect some reference events early and provides a transparent baseline for improvement.
+
+---
+
+## Reference event detection
+
+Reference events in the real data are inferred from the metal-detector `VoltageSignal`.
+
+The pipeline:
+
+1. Extracts continuous `HeaderOn` episodes.
+2. Extends each episode by a short grace period after shutdown.
+3. Searches for high-voltage regions inside the extended episode.
+4. Groups nearby high-voltage samples into candidate events.
+5. Deduplicates repeated detections of the same voltage peak.
+6. Stores event metadata in the shared `StoneEvent` dataclass.
+
+Audit reference events:
+
+```bash
+python scripts/audit_reference_events.py \
+  --raster 0.001 \
+  --event-threshold-quantile 0.999 \
+  --min-ratio 1.10
+```
+
+The reference layer is treated as a proxy label source, not perfect physical ground truth. A model alarm without a matching voltage reference is counted as a false detection relative to the available reference signal, but some unmatched acoustic detections could still be physically meaningful.
+
+---
+
+## Windowing and labels
+
+The baseline uses live-style sliding windows.
+
+Default:
+
+```text
+window_s = 0.5
+hop_s = 0.1
+positive_horizon_s = 1.0
+post_event_exclusion_s = 1.0
+```
+
+Labels:
+
+| Label | Meaning |
+|---:|---|
+| `1` | Positive early-warning window |
+| `0` | Normal negative window |
+| `-1` | Ignored ambiguous window |
+
+Positive labels are assigned to windows that occur before a reference event and within the early-warning horizon. Windows immediately after a reference event are ignored to avoid contamination from impact or shutdown artifacts.
+
+---
+
+## Feature extraction
+
+The Random Forest baseline uses engineered features from each sliding window.
+
+Feature groups include:
+
+- Time-domain audio statistics.
+- RMS and peak amplitude.
+- Crest factor.
+- Zero-crossing rate.
+- Frequency-band energy.
+- Spectral centroid.
+- Spectral bandwidth.
+- High-frequency energy ratio.
+- Vehicle speed statistics.
+- Cut length statistics.
+- Run-local temporal delta features.
+
+`VehicleSpeed` and `CutLength` are retained as operating-context features. They can help describe the acoustic background and may also correlate with stone-ingestion risk or event severity.
+
+---
 
 ## Evaluation metrics
 
@@ -402,180 +385,266 @@ The baseline reports:
 - Mean seconds between false detections.
 - Average advance warning time.
 
-The seconds-per-false-alarm metric is included because false detections per hour can hide the practical severity of the problem.
-
-For example:
+The seconds-per-false-detection metric is reported because false detections per hour can sound abstract. For example:
 
 ```text
-307 false detections/hour ≈ one false alarm every 11.7 seconds
+307 false detections/hour ≈ one false detection every 11.7 seconds
 ```
 
-## Current baseline result
+---
 
-Using the current default configuration:
+## Bonus 1: synthetic data generation
+
+Bonus 1 generates CLAAS-like synthetic time-series runs in the same DataFrame format used by Task 1 and Task 2.
+
+The generator creates:
+
+- `Sensor1`
+- `VehicleSpeed`
+- `CutLength`
+- `VoltageSignal`
+- `Status`
+- `HeaderOn`
+
+Synthetic runs include:
+
+- Header-on operating periods.
+- Smooth vehicle-speed variation.
+- Smooth cut-length variation.
+- Background harvesting audio.
+- Context-dependent stone-event probability.
+- Pre-impact acoustic precursor.
+- Main stone-like impact transient.
+- Reference voltage spike after the acoustic event.
+
+Generate a small smoke-test dataset:
 
 ```bash
-python scripts/run_baseline.py --raster 0.001 --window-s 0.5 --hop-s 0.1
+python scripts/generate_synthetic_dataset.py \
+  --output-dir synthetic_data_test \
+  --n-runs 3 \
+  --duration-s 20 \
+  --sample-rate-hz 1000 \
+  --event-rate-per-minute 30
 ```
 
-the overall grouped cross-validation result at threshold `0.10` is:
+Generate the main 100-run synthetic dataset:
+
+```bash
+python scripts/generate_synthetic_dataset.py \
+  --output-dir synthetic_data \
+  --n-runs 100 \
+  --duration-s 120 \
+  --sample-rate-hz 1000 \
+  --event-rate-per-minute 2
+```
+
+The generated files are ignored by Git.
+
+---
+
+## Bonus 1: Random Forest on synthetic data
+
+The synthetic Random Forest baseline reuses the same Task 2 pipeline. It only swaps the data source and reference-event source:
 
 ```text
-Reference events: 28
-Detected events: 12/28
-True positive rate: 0.429
-False detections/hour: 307.441
-Mean seconds between false detections: 11.710 s
-Average advance time: 0.697 s
+real data:
+MF4 files → read_dataset() → voltage-derived StoneEvent references
+
+synthetic data:
+CSV files → read_synthetic_dataset() → metadata-derived StoneEvent references
 ```
 
-This result is not deployment-ready. It shows that the pipeline can detect some reference events early, but the false-alarm rate is still too high for real agricultural operation.
+Run:
 
-Operationally, one false alarm every 11.7 seconds would interrupt the harvester too frequently. This motivates stronger feature engineering, synthetic data generation, and more robust temporal models.
+```bash
+python scripts/run_synthetic_baseline.py --synthetic-dir synthetic_data
+```
 
-## Threshold sweep
-
-The baseline runner prints a threshold sweep by default:
+Current 100-run synthetic result after adding pre-impact acoustic precursors:
 
 ```text
-0.05, 0.10, 0.15, 0.20, 0.30, 0.50
+Runs: 100
+Windows: 108600
+Reference events: 384
+
+threshold=0.50
+Detected events: 379/384
+True positive rate: 0.987
+False detections/hour: 9.578
+Mean seconds between false detections: 375.866 s
+Average advance time: 0.218 s
 ```
 
-This exposes the trade-off between sensitivity and false alarms.
+This demonstrates that the Task 2 pipeline scales to 100 generated runs and can learn a consistent injected pre-impact acoustic precursor. It should not be interpreted as proof that the real-world problem is solved, because the synthetic labels and event structure are controlled.
 
-Lower thresholds detect more reference events but create many false alarms. Higher thresholds reduce false alarms but miss most reference events.
+---
 
-## Consensus alarm filtering
+## 2D CNN status
 
-The evaluator supports k-of-n consensus alarm filtering. For example:
+2D CNN work is **in progress**.
+
+Implemented so far:
+
+- Reusable NumPy log-spectrogram extraction.
+- Spectrogram window data structures.
+- Compact `TinySpectrogramCNN` model scaffold.
+- Tests that skip CNN execution when PyTorch is not installed.
+
+Not finalized yet:
+
+- CNN training script.
+- CNN evaluation on synthetic spectrogram windows.
+- Export or deployment path for the CNN.
+
+The CNN path is intentionally separated from the Random Forest pipeline so that the project can keep a working, tested baseline while the neural model remains experimental.
+
+---
+
+## Bonus 2: microcontroller deployment artefacts
+
+Bonus 2 assumes a 2 MB RAM automotive microcontroller and inference-only deployment.
+
+The selected deployment model is a **constrained Random Forest**, not the CNN.
+
+Reason:
+
+- It reuses the existing Task 2 feature pipeline.
+- It avoids Python, PyTorch, TensorFlow, or dynamic allocation at inference time.
+- It compiles into plain C arrays and simple if/else tree traversal.
+- It is easier to audit than a rushed neural-network deployment.
+- It can be constrained with a small number of trees and limited tree depth.
+
+Export MCU artefacts:
 
 ```bash
-python scripts/run_baseline.py --consensus-k 2 --consensus-n 3
+python scripts/export_mcu_random_forest.py \
+  --synthetic-dir synthetic_data \
+  --output-dir artifacts/mcu_random_forest \
+  --max-runs 100 \
+  --n-estimators 8 \
+  --max-depth 6 \
+  --min-samples-leaf 4
 ```
 
-This means an alarm is emitted only if at least 2 of the last 3 windows exceed the score threshold.
+Generated artefacts:
 
-Consensus filtering reduces isolated false alarms, but it can also reduce early detection sensitivity.
-
-## Optional strong-reference filtering
-
-Reference events can be filtered by peak-to-threshold ratio:
-
-```bash
-python scripts/run_baseline.py --min-event-ratio 1.10
+```text
+artifacts/mcu_random_forest/
+├── README.md
+├── claas_stone_rf_mcu.h
+├── claas_stone_rf_mcu.json
+└── feature_order.txt
 ```
 
-This is useful for experiments with stronger reference events only. It is not enabled by default because the full deduplicated reference set is retained for the baseline.
+Current export summary:
 
-## Example usage
-
-Load one MF4 file:
-
-```python
-from claas_stone_detection.data.io import read_mf4
-
-df = read_mf4("data/Messung_2025-05-09_08-59-34.mf4")
-print(df.head())
+```text
+Feature count: 36
+Tree count: 8
+Estimated model bytes: 11536
+RAM limit: 2097152 bytes
+2 MB fit check: PASS
 ```
 
-Load all runs:
+The C header contains:
 
-```python
-from claas_stone_detection.data.io import read_dataset
+- Tree node arrays.
+- Feature threshold comparisons.
+- `claas_rf_predict_proba()`.
+- `claas_rf_predict()`.
 
-dataset = read_dataset("data", raster=0.001)
-print(dataset.keys())
-```
+The JSON file contains the same exported model in a readable format. `feature_order.txt` records the exact feature vector order expected by firmware.
 
-Extract header-on episodes:
-
-```python
-from claas_stone_detection.reference.episodes import extract_header_on_episodes
-
-episodes = extract_header_on_episodes(df)
-print(episodes)
-```
-
-Detect voltage reference events:
-
-```python
-from claas_stone_detection.reference.events import detect_voltage_events
-
-events = detect_voltage_events(df, run_name="example_run")
-print(events)
-```
-
-Detect voltage reference events for all runs:
-
-```python
-from claas_stone_detection.reference.events import detect_voltage_events_in_dataset
-
-events_by_run = detect_voltage_events_in_dataset(dataset)
-print({run_name: len(events) for run_name, events in events_by_run.items()})
-```
-
-Run the baseline:
-
-```bash
-python scripts/run_baseline.py --raster 0.001 --window-s 0.5 --hop-s 0.1
-```
-
-Run the baseline with conservative alarm consensus:
-
-```bash
-python scripts/run_baseline.py --raster 0.001 --window-s 0.5 --hop-s 0.1 --consensus-k 2 --consensus-n 3
-```
-
-## Design notes
-
-### Task 1 design
-
-The data loading layer separates:
-
-- Channel definitions in `core/schema.py`.
-- Validation checks in `core/validation.py`.
-- Status normalization in `core/preprocessing.py`.
-- MF4 reading utilities in `data/io.py`.
-
-This keeps data access independent from model development.
-
-### Task 2 design
-
-The Task 2 baseline separates:
-
-- Episode extraction in `reference/episodes.py`.
-- Reference event detection in `reference/events.py`.
-- Window labeling in `reference/labels.py`.
-- Streaming window generation in `streaming/windowing.py`.
-- Feature extraction in `streaming/features.py`.
-- Baseline model training in `models/baseline.py`.
-- Evaluation metrics in `evaluation/metrics.py`.
-
-The model does not directly know about MF4 files or voltage event detection. It consumes labeled feature tables, which keeps the pipeline modular and testable.
+---
 
 ## Important limitations
 
-The current baseline is intentionally simple and should be interpreted as a first engineering baseline, not a final deployable model.
+The current project should be interpreted as an engineering prototype, not a finished production detector.
 
 Known limitations:
 
-- The dataset contains only five real measurement runs.
-- Reference labels are inferred from voltage events rather than manually annotated stone impacts.
-- Some reference events are weak or borderline.
-- Acoustic conditions vary strongly across runs.
-- The Random Forest sees compact window features rather than raw temporal structure.
-- False-alarm rates remain too high for deployment.
+- The real dataset contains only five measurement runs.
+- Real reference labels are inferred from voltage events, not manual stone annotations.
+- Some voltage reference events are weak or borderline.
+- Acoustic conditions vary strongly across real runs.
+- The Random Forest uses compact engineered features rather than full raw temporal structure.
+- False-alarm rates on real data remain too high for deployment.
+- Synthetic-data performance is much stronger because the event structure is controlled.
+- CNN training/evaluation is still in progress.
+- The Bonus 2 memory estimate covers exported model arrays, not the full firmware stack.
+
+---
+
+## Common commands
+
+Run all tests:
+
+```bash
+python -m pytest
+```
+
+Run linting:
+
+```bash
+ruff check .
+```
+
+Run real-data baseline:
+
+```bash
+python scripts/run_baseline.py --raster 0.001 --window-s 0.5 --hop-s 0.1
+```
+
+Generate synthetic data:
+
+```bash
+python scripts/generate_synthetic_dataset.py \
+  --output-dir synthetic_data \
+  --n-runs 100 \
+  --duration-s 120 \
+  --sample-rate-hz 1000 \
+  --event-rate-per-minute 2
+```
+
+Run synthetic Random Forest baseline:
+
+```bash
+python scripts/run_synthetic_baseline.py --synthetic-dir synthetic_data
+```
+
+Export Bonus 2 MCU artefacts:
+
+```bash
+python scripts/export_mcu_random_forest.py \
+  --synthetic-dir synthetic_data \
+  --output-dir artifacts/mcu_random_forest \
+  --max-runs 100 \
+  --n-estimators 8 \
+  --max-depth 6 \
+  --min-samples-leaf 4
+```
+
+---
 
 ## Reproducibility notes
 
-The baseline uses:
+The repository includes tests for:
 
-- Deterministic Random Forest random seed.
-- Grouped cross-validation by run name.
-- Explicit raster sampling.
-- Unit tests for data loading, event detection, labeling, feature extraction, model training, and evaluation.
+- MF4 loading and validation.
+- Header-on episode extraction.
+- Voltage reference event detection.
+- Reference event deduplication.
+- Window labeling.
+- Feature extraction.
+- Random Forest baseline training.
+- Evaluation metrics.
+- Synthetic data generation and loading.
+- Shared baseline pipeline reuse.
+- Spectrogram utilities.
+- MCU Random Forest export.
 
-Run all checks with:
+Run the full verification suite:
 
 ```bash
 python -m pytest
