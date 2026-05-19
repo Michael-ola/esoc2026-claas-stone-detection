@@ -10,7 +10,10 @@ from claas_stone_detection.models.baseline import train_random_forest_baseline
 from claas_stone_detection.reference.episodes import extract_header_on_episodes
 from claas_stone_detection.reference.events import StoneEvent, detect_voltage_events
 from claas_stone_detection.reference.labels import IGNORE_LABEL, label_feature_table
-from claas_stone_detection.streaming.features import make_feature_table
+from claas_stone_detection.streaming.features import (
+    add_temporal_delta_features,
+    make_feature_table,
+)
 from claas_stone_detection.streaming.windowing import make_sliding_windows
 
 
@@ -143,6 +146,8 @@ def main() -> None:
 
     if feature_table.empty:
         raise RuntimeError("No feature windows were generated.")
+
+    feature_table = add_temporal_delta_features(feature_table)
 
     labeled_table = label_feature_table(
         feature_table=feature_table,
