@@ -37,6 +37,7 @@ class EvaluationResult:
     n_false_detections: int
     true_positive_rate: float
     false_detections_per_hour: float
+    mean_seconds_between_false_detections: float | None
     average_advance_time_s: float | None
 
 
@@ -44,8 +45,15 @@ def prediction_table_to_detections(
     prediction_table: pd.DataFrame,
     threshold: float = 0.5,
     score_column: str = "score",
+    consensus_k: int = 1,
+    consensus_n: int = 1,
 ) -> list[DetectionEvent]:
-    """Convert window-level prediction scores into model alarm events."""
+    """Convert window-level prediction scores into model alarm events.
+
+    A detection is emitted only when at least consensus_k of the latest
+    consensus_n windows in the same run exceed the score threshold. The default
+    consensus setting, 1-of-1, keeps the standard single-window alarm behavior.
+    """
     required_columns = {"run_name", "detection_time", score_column}
     missing_columns = required_columns.difference(prediction_table.columns)
 
@@ -55,21 +63,67 @@ def prediction_table_to_detections(
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("threshold must be between 0 and 1.")
 
+    _validate_consensus(consensus_k=consensus_k, consensus_n=consensus_n)
+
+    alarm_table = apply_consensus_alarm_filter(
+        prediction_table=prediction_table,
+        threshold=threshold,
+        score_column=score_column,
+        consensus_k=consensus_k,
+        consensus_n=consensus_n,
+    )
+
     detections: list[DetectionEvent] = []
 
-    for row in prediction_table.itertuples(index=False):
-        score = float(getattr(row, score_column))
-
-        if score >= threshold:
-            detections.append(
-                DetectionEvent(
-                    run_name=str(row.run_name),
-                    detection_time=float(row.detection_time),
-                    score=score,
-                )
+    for row in alarm_table.itertuples(index=False):
+        detections.append(
+            DetectionEvent(
+                run_name=str(row.run_name),
+                detection_time=float(row.detection_time),
+                score=float(getattr(row, score_column)),
             )
+        )
 
     return detections
+
+
+def apply_consensus_alarm_filter(
+    prediction_table: pd.DataFrame,
+    threshold: float,
+    score_column: str = "score",
+    consensus_k: int = 1,
+    consensus_n: int = 1,
+) -> pd.DataFrame:
+    """Return rows that satisfy a k-of-n past-window alarm rule.
+
+    The consensus window is causal: it uses the current row and previous rows
+    within the same run, never future windows.
+    """
+    required_columns = {"run_name", "detection_time", score_column}
+    missing_columns = required_columns.difference(prediction_table.columns)
+
+    if missing_columns:
+        raise ValueError(f"Missing prediction table columns: {missing_columns}")
+
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError("threshold must be between 0 and 1.")
+
+    _validate_consensus(consensus_k=consensus_k, consensus_n=consensus_n)
+
+    sorted_table = prediction_table.sort_values(["run_name", "detection_time"]).copy()
+    sorted_table["_above_threshold"] = sorted_table[score_column] >= threshold
+
+    rolling_hits = (
+        sorted_table.groupby("run_name")["_above_threshold"]
+        .rolling(window=consensus_n, min_periods=consensus_k)
+        .sum()
+        .reset_index(level=0, drop=True)
+    )
+
+    sorted_table["_consensus_alarm"] = rolling_hits >= consensus_k
+    alarm_table = sorted_table[sorted_table["_consensus_alarm"]].copy()
+
+    return alarm_table.drop(columns=["_above_threshold", "_consensus_alarm"])
 
 
 def suppress_repeated_detections(
@@ -111,10 +165,6 @@ def match_detections_to_events(
     A detection matches an event if it occurs before the event peak and within
     the allowed early-detection horizon. Each detection can match at most one
     reference event.
-
-    Detection candidates are searched per run using sorted detection times and
-    numpy.searchsorted, avoiding a full nested scan over all detections for
-    every event.
     """
     required_columns = {"run_name", "peak_time"}
     missing_columns = required_columns.difference(reference_events.columns)
@@ -214,6 +264,11 @@ def summarize_evaluation(
     )
 
     false_detections_per_hour = n_false_detections / (evaluated_duration_s / 3600.0)
+    mean_seconds_between_false_detections = (
+        evaluated_duration_s / n_false_detections
+        if n_false_detections > 0
+        else None
+    )
 
     advance_times = [
         match.advance_time_s for match in matches if match.advance_time_s is not None
@@ -226,6 +281,7 @@ def summarize_evaluation(
         n_false_detections=n_false_detections,
         true_positive_rate=true_positive_rate,
         false_detections_per_hour=false_detections_per_hour,
+        mean_seconds_between_false_detections=mean_seconds_between_false_detections,
         average_advance_time_s=average_advance_time_s,
     )
 
@@ -238,12 +294,16 @@ def evaluate_predictions(
     score_column: str = "score",
     max_early_s: float = 2.0,
     refractory_s: float = 1.0,
+    consensus_k: int = 1,
+    consensus_n: int = 1,
 ) -> EvaluationResult:
     """Evaluate window-level prediction scores against reference events."""
     detections = prediction_table_to_detections(
         prediction_table=prediction_table,
         threshold=threshold,
         score_column=score_column,
+        consensus_k=consensus_k,
+        consensus_n=consensus_n,
     )
     detections = suppress_repeated_detections(
         detections=detections,
@@ -290,3 +350,14 @@ def _group_detections_by_run(
         }
 
     return result
+
+
+def _validate_consensus(consensus_k: int, consensus_n: int) -> None:
+    if consensus_k <= 0:
+        raise ValueError("consensus_k must be positive.")
+
+    if consensus_n <= 0:
+        raise ValueError("consensus_n must be positive.")
+
+    if consensus_k > consensus_n:
+        raise ValueError("consensus_k cannot be greater than consensus_n.")

@@ -119,7 +119,9 @@ def main() -> None:
     )
 
 
-def events_to_rows(events: list[StoneEvent]) -> list[dict[str, float | int | str | bool]]:
+def events_to_rows(
+    events: list[StoneEvent],
+) -> list[dict[str, float | int | str | bool]]:
     rows: list[dict[str, float | int | str | bool]] = []
 
     for event_index, event in enumerate(events, start=1):
