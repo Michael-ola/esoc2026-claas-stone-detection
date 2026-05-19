@@ -202,13 +202,16 @@ def run_grouped_random_forest_evaluation(
             consensus_n=config.consensus_n,
         )
 
+        seconds_between_false = format_optional_float(
+            fold_result.mean_seconds_between_false_detections
+        )
+
         print(
             f"Fold {fold_index}: "
             f"runs={len(validation_runs)} | "
             f"TPR={fold_result.true_positive_rate:.3f} | "
             f"false/hour={fold_result.false_detections_per_hour:.3f} | "
-            "sec/false="
-            f"{format_optional_float(fold_result.mean_seconds_between_false_detections)} | "
+            f"sec/false={seconds_between_false} | "
             f"advance={format_optional_float(fold_result.average_advance_time_s)}"
         )
 
