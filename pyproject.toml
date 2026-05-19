@@ -11,6 +11,8 @@ dependencies = [
     "asammdf",
     "numpy",
     "pandas",
+    "scipy",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]
