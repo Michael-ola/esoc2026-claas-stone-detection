@@ -5,6 +5,8 @@ import pytest
 
 from claas_stone_detection.reference.episodes import Episode
 from claas_stone_detection.reference.events import (
+    StoneEvent,
+    deduplicate_stone_events,
     detect_voltage_events,
     detect_voltage_events_in_dataset,
     group_candidate_regions,
@@ -201,3 +203,33 @@ def test_detect_voltage_events_in_dataset_returns_events_per_run() -> None:
     assert len(events["run_b"]) == 1
     assert events["run_a"][0].run_name == "run_a"
     assert events["run_b"][0].run_name == "run_b"
+
+def test_deduplicate_stone_events_keeps_closest_episode_association() -> None:
+    early_episode_duplicate = StoneEvent(
+        run_name="run_a",
+        start_time=9.9,
+        peak_time=10.0,
+        end_time=10.1,
+        peak_voltage=100.0,
+        threshold=50.0,
+        episode_start_time=0.0,
+        episode_end_time=50.0,
+    )
+    shutdown_aligned_duplicate = StoneEvent(
+        run_name="run_a",
+        start_time=9.9,
+        peak_time=10.0,
+        end_time=10.1,
+        peak_voltage=100.0,
+        threshold=80.0,
+        episode_start_time=8.0,
+        episode_end_time=9.98,
+    )
+
+    result = deduplicate_stone_events(
+        events=[early_episode_duplicate, shutdown_aligned_duplicate],
+        duplicate_tolerance_s=0.001,
+    )
+
+    assert result == [shutdown_aligned_duplicate]
+

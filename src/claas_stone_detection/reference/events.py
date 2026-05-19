@@ -9,7 +9,7 @@ from claas_stone_detection.reference.episodes import Episode, extract_header_on_
 
 @dataclass(frozen=True)
 class StoneEvent:
-    """Reference stone event inferred from a voltage signal peak."""
+    """Reference voltage event inferred from the metal detector signal."""
 
     run_name: str
     start_time: float
@@ -23,14 +23,15 @@ class StoneEvent:
 
     @property
     def duration_s(self) -> float:
-        """Duration of the above-threshold voltage region."""
+        """Duration of the above-threshold event region in seconds."""
         return self.end_time - self.start_time
 
     @property
     def peak_to_threshold_ratio(self) -> float:
-        """Peak voltage divided by the local detection threshold."""
-        if self.threshold == 0:
+        """Ratio between the event peak and the local detection threshold."""
+        if self.threshold == 0.0:
             return float("inf")
+
         return self.peak_voltage / self.threshold
 
 
@@ -38,13 +39,12 @@ def group_candidate_regions(
     candidate_times: np.ndarray,
     min_gap_s: float,
 ) -> list[tuple[float, float]]:
-    """Group candidate timestamps into contiguous event regions.
-
-    Candidate timestamps separated by at most `min_gap_s` are treated as part
-    of the same event region.
-    """
+    """Group candidate timestamps separated by less than min_gap_s."""
     if len(candidate_times) == 0:
         return []
+
+    if min_gap_s < 0:
+        raise ValueError("min_gap_s cannot be negative.")
 
     groups: list[tuple[float, float]] = []
     start_time = float(candidate_times[0])
@@ -67,45 +67,35 @@ def group_candidate_regions(
 def detect_voltage_events(
     df: pd.DataFrame,
     episodes: list[Episode] | None = None,
-    schema: ChannelSchema = DEFAULT_SCHEMA,
     threshold_quantile: float = 0.999,
     min_gap_s: float = 0.5,
     min_duration_s: float = 0.01,
     run_name: str = "",
+    schema: ChannelSchema = DEFAULT_SCHEMA,
+    deduplicate: bool = True,
+    duplicate_tolerance_s: float = 0.001,
 ) -> list[StoneEvent]:
-    """Detect voltage reference events within header-on episodes.
+    """Detect candidate reference events from the voltage signal.
 
-    The voltage threshold is computed separately for each extended episode
-    window. This adapts the detection to local operating conditions.
-
-    Parameters
-    ----------
-    df:
-        Measurement DataFrame containing VoltageSignal and HeaderOn columns.
-    episodes:
-        Optional precomputed header-on episodes. If not provided, episodes are
-        extracted using the default episode extraction settings.
-    schema:
-        Channel schema.
-    threshold_quantile:
-        Episode-level voltage quantile used as the adaptive threshold.
-    min_gap_s:
-        Minimum time gap separating voltage event regions.
-    min_duration_s:
-        Minimum above-threshold region duration required to keep an event.
-    run_name:
-        Name of the measurement run. Stored in each returned StoneEvent.
-
-    Returns
-    -------
-    list[StoneEvent]
-        Detected voltage reference events.
+    Detection is performed inside each extended header-on episode using an
+    episode-local quantile threshold. Events are deduplicated by peak time
+    because overlapping or extended episode windows can otherwise identify the
+    same physical voltage peak multiple times.
     """
     if schema.voltage not in df.columns:
         raise ValueError(f"Missing voltage column: {schema.voltage}")
 
+    if not 0.0 < threshold_quantile < 1.0:
+        raise ValueError("threshold_quantile must be between 0 and 1.")
+
+    if min_duration_s < 0:
+        raise ValueError("min_duration_s cannot be negative.")
+
+    if duplicate_tolerance_s <= 0:
+        raise ValueError("duplicate_tolerance_s must be positive.")
+
     if episodes is None:
-        episodes = extract_header_on_episodes(df, schema=schema)
+        episodes = extract_header_on_episodes(df)
 
     events: list[StoneEvent] = []
 
@@ -115,9 +105,7 @@ def detect_voltage_events(
         if episode_df.empty:
             continue
 
-        voltage = episode_df[schema.voltage]
-        threshold = float(voltage.quantile(threshold_quantile))
-
+        threshold = float(episode_df[schema.voltage].quantile(threshold_quantile))
         candidate_df = episode_df[episode_df[schema.voltage] > threshold]
         candidate_times = candidate_df.index.to_numpy(dtype=float)
 
@@ -127,20 +115,23 @@ def detect_voltage_events(
         )
 
         for start_time, end_time in groups:
-            duration_s = end_time - start_time
-            if duration_s < min_duration_s:
+            if end_time - start_time < min_duration_s:
                 continue
 
-            group_df = df.loc[start_time:end_time]
+            group_df = episode_df.loc[start_time:end_time]
+
+            if group_df.empty:
+                continue
+
             peak_time = float(group_df[schema.voltage].idxmax())
             peak_voltage = float(group_df.loc[peak_time, schema.voltage])
 
             events.append(
                 StoneEvent(
                     run_name=run_name,
-                    start_time=start_time,
+                    start_time=float(start_time),
                     peak_time=peak_time,
-                    end_time=end_time,
+                    end_time=float(end_time),
                     peak_voltage=peak_voltage,
                     threshold=threshold,
                     episode_start_time=episode.start_time,
@@ -149,25 +140,78 @@ def detect_voltage_events(
                 )
             )
 
-    return events
+    if not deduplicate:
+        return events
+
+    return deduplicate_stone_events(
+        events=events,
+        duplicate_tolerance_s=duplicate_tolerance_s,
+    )
 
 
 def detect_voltage_events_in_dataset(
     dataset: dict[str, pd.DataFrame],
-    schema: ChannelSchema = DEFAULT_SCHEMA,
     threshold_quantile: float = 0.999,
     min_gap_s: float = 0.5,
     min_duration_s: float = 0.01,
+    schema: ChannelSchema = DEFAULT_SCHEMA,
 ) -> dict[str, list[StoneEvent]]:
-    """Detect voltage reference events for all runs in a dataset."""
-    return {
-        run_name: detect_voltage_events(
+    """Detect reference voltage events for each run in a dataset."""
+    events_by_run: dict[str, list[StoneEvent]] = {}
+
+    for run_name, df in dataset.items():
+        episodes = extract_header_on_episodes(df)
+        events_by_run[run_name] = detect_voltage_events(
             df=df,
-            schema=schema,
+            episodes=episodes,
             threshold_quantile=threshold_quantile,
             min_gap_s=min_gap_s,
             min_duration_s=min_duration_s,
             run_name=run_name,
+            schema=schema,
         )
-        for run_name, df in dataset.items()
-    }
+
+    return events_by_run
+
+
+def deduplicate_stone_events(
+    events: list[StoneEvent],
+    duplicate_tolerance_s: float = 0.001,
+) -> list[StoneEvent]:
+    """Remove duplicate event detections with nearly identical peak times.
+
+    When the same voltage peak is found through multiple episode windows, the
+    preferred event is the one whose peak is closest to the end of its associated
+    header-on episode. This keeps shutdown-trigger-like reference events aligned
+    with the episode most likely to have caused them. Ties are resolved by the
+    larger peak-to-threshold ratio.
+    """
+    if duplicate_tolerance_s <= 0:
+        raise ValueError("duplicate_tolerance_s must be positive.")
+
+    if not events:
+        return []
+
+    grouped: dict[tuple[str, int], list[StoneEvent]] = {}
+
+    for event in events:
+        peak_key = int(round(event.peak_time / duplicate_tolerance_s))
+        grouped.setdefault((event.run_name, peak_key), []).append(event)
+
+    deduplicated: list[StoneEvent] = []
+
+    for duplicates in grouped.values():
+        best_event = min(
+            duplicates,
+            key=lambda event: (
+                abs(event.peak_time - event.episode_end_time),
+                -event.peak_to_threshold_ratio,
+                -event.peak_voltage,
+            ),
+        )
+        deduplicated.append(best_event)
+
+    return sorted(
+        deduplicated,
+        key=lambda event: (event.run_name, event.peak_time),
+    )
