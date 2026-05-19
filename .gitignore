@@ -7,5 +7,5 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 .ipynb_checkpoints/
-synthetic_data/
-synthetic_data_test/
+/synthetic_data/*
+/synthetic_data_test/*
