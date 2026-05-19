@@ -110,6 +110,13 @@ def generate_synthetic_run(
         )
         width_s = float(rng.uniform(0.015, 0.055))
 
+        audio += make_preimpact_acoustic_precursor(
+            time=time,
+            event_time=event_time,
+            amplitude=0.35 * amplitude,
+            duration_s=float(rng.uniform(0.45, 0.90)),
+            rng=rng,
+        )
         audio += make_stone_audio_transient(
             time=time,
             event_time=event_time,
@@ -301,6 +308,41 @@ def sample_event_amplitude(
     cut_component = 3.0 / max(cut_length, 1.0)
     random_component = float(rng.uniform(1.5, 3.5))
     return random_component + speed_component + cut_component
+
+
+def make_preimpact_acoustic_precursor(
+    time: np.ndarray,
+    event_time: float,
+    amplitude: float,
+    duration_s: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Create a weak pre-impact acoustic precursor before a stone event.
+
+    The precursor represents rubbing, rattling, or contact noise that can appear
+    before the main impact and before the metal-detector voltage spike. This
+    makes the synthetic task better aligned with early detection.
+    """
+    if duration_s <= 0:
+        raise ValueError("duration_s must be positive.")
+
+    start_time = event_time - duration_s
+    active = (time >= start_time) & (time <= event_time)
+
+    if not np.any(active):
+        return np.zeros_like(time, dtype=float)
+
+    local_time = np.clip((time - start_time) / duration_s, 0.0, 1.0)
+    ramp = local_time**1.5
+    envelope = active.astype(float) * ramp
+
+    low_contact = np.sin(2.0 * np.pi * 95.0 * (time - start_time))
+    mid_contact = np.sin(2.0 * np.pi * 240.0 * (time - start_time))
+    broadband = rng.normal(0.0, 1.0, size=len(time))
+
+    return amplitude * envelope * (
+        0.35 * low_contact + 0.35 * mid_contact + 0.30 * broadband
+    )
 
 
 def make_stone_audio_transient(

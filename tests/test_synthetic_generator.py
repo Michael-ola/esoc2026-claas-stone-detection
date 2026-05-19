@@ -7,6 +7,7 @@ from claas_stone_detection.synthetic_data.generator import (
     enforce_minimum_event_spacing,
     generate_synthetic_dataset,
     generate_synthetic_run,
+    make_preimpact_acoustic_precursor,
 )
 
 
@@ -122,3 +123,34 @@ def test_generate_synthetic_run_rejects_invalid_config() -> None:
 
     with pytest.raises(ValueError, match="Header-on interval"):
         generate_synthetic_run(config)
+
+def test_make_preimpact_acoustic_precursor_is_before_event() -> None:
+    rng = np.random.default_rng(123)
+    time = np.arange(0.0, 3.0, 0.001)
+
+    precursor = make_preimpact_acoustic_precursor(
+        time=time,
+        event_time=2.0,
+        amplitude=1.0,
+        duration_s=0.5,
+        rng=rng,
+    )
+
+    assert np.max(np.abs(precursor[time < 1.5])) == pytest.approx(0.0)
+    assert np.max(np.abs(precursor[(time >= 1.5) & (time <= 2.0)])) > 0.0
+    assert np.max(np.abs(precursor[time > 2.0])) == pytest.approx(0.0)
+
+
+def test_make_preimpact_acoustic_precursor_rejects_invalid_duration() -> None:
+    rng = np.random.default_rng(123)
+    time = np.arange(0.0, 1.0, 0.001)
+
+    with pytest.raises(ValueError, match="duration_s must be positive"):
+        make_preimpact_acoustic_precursor(
+            time=time,
+            event_time=0.5,
+            amplitude=1.0,
+            duration_s=0.0,
+            rng=rng,
+        )
+
