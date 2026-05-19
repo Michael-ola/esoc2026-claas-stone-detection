@@ -3,6 +3,7 @@ import pytest
 
 from claas_stone_detection.evaluation.metrics import (
     DetectionEvent,
+    apply_consensus_alarm_filter,
     evaluate_predictions,
     match_detections_to_events,
     prediction_table_to_detections,
@@ -41,6 +42,44 @@ def test_prediction_table_to_detections_applies_threshold() -> None:
     assert detections[0].score == 0.8
 
 
+def test_apply_consensus_alarm_filter_requires_k_of_n_hits() -> None:
+    table = pd.DataFrame(
+        {
+            "run_name": ["run_a", "run_a", "run_a", "run_a"],
+            "detection_time": [1.0, 2.0, 3.0, 4.0],
+            "score": [0.6, 0.2, 0.7, 0.8],
+        }
+    )
+
+    result = apply_consensus_alarm_filter(
+        prediction_table=table,
+        threshold=0.5,
+        consensus_k=2,
+        consensus_n=3,
+    )
+
+    assert result["detection_time"].tolist() == [3.0, 4.0]
+
+
+def test_consensus_alarm_filter_does_not_cross_run_boundaries() -> None:
+    table = pd.DataFrame(
+        {
+            "run_name": ["run_a", "run_b"],
+            "detection_time": [1.0, 1.0],
+            "score": [0.8, 0.8],
+        }
+    )
+
+    result = apply_consensus_alarm_filter(
+        prediction_table=table,
+        threshold=0.5,
+        consensus_k=2,
+        consensus_n=2,
+    )
+
+    assert result.empty
+
+
 def test_prediction_table_to_detections_rejects_missing_columns() -> None:
     table = pd.DataFrame({"score": [0.5]})
 
@@ -51,6 +90,16 @@ def test_prediction_table_to_detections_rejects_missing_columns() -> None:
 def test_prediction_table_to_detections_rejects_invalid_threshold() -> None:
     with pytest.raises(ValueError, match="threshold must be between 0 and 1"):
         prediction_table_to_detections(make_prediction_table(), threshold=1.2)
+
+
+def test_prediction_table_to_detections_rejects_invalid_consensus() -> None:
+    with pytest.raises(ValueError, match="consensus_k cannot be greater"):
+        prediction_table_to_detections(
+            make_prediction_table(),
+            threshold=0.5,
+            consensus_k=3,
+            consensus_n=2,
+        )
 
 
 def test_suppress_repeated_detections_keeps_first_alarm_in_refractory_period() -> None:
@@ -165,3 +214,27 @@ def test_evaluate_predictions_end_to_end() -> None:
     assert result.n_detected_events == 1
     assert result.n_false_detections == 1
     assert result.true_positive_rate == pytest.approx(1.0)
+
+
+def test_evaluate_predictions_applies_consensus_filter() -> None:
+    prediction_table = pd.DataFrame(
+        {
+            "run_name": ["run_a", "run_a", "run_a"],
+            "detection_time": [8.0, 9.0, 9.5],
+            "score": [0.9, 0.2, 0.9],
+        }
+    )
+
+    result = evaluate_predictions(
+        prediction_table=prediction_table,
+        reference_events=make_reference_events(),
+        evaluated_duration_s=3600.0,
+        threshold=0.5,
+        max_early_s=2.0,
+        refractory_s=0.5,
+        consensus_k=2,
+        consensus_n=2,
+    )
+
+    assert result.n_detected_events == 0
+    assert result.n_false_detections == 0
