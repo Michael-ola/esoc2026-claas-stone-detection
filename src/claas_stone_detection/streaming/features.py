@@ -22,6 +22,18 @@ class FeatureConfig:
 DEFAULT_FEATURE_CONFIG = FeatureConfig()
 
 
+NON_DELTA_COLUMNS = {
+    "window_start",
+    "window_end",
+    "detection_time",
+    "start_index",
+    "end_index",
+    "label",
+    "event_peak_time",
+    "time_to_event_s",
+}
+
+
 def infer_sample_rate_hz(index: pd.Index) -> float:
     """Infer the sampling rate from a numeric time index in seconds."""
     if len(index) < 2:
@@ -201,3 +213,66 @@ def _band_feature_name(low_hz: float, high_hz: float) -> str:
     low = int(low_hz)
     high = int(high_hz)
     return f"band_energy_{low}_{high}_hz"
+
+def add_temporal_delta_features(
+    feature_table: pd.DataFrame,
+    group_column: str = "run_name",
+    order_column: str = "detection_time",
+    lag: int = 1,
+    suffix: str | None = None,
+) -> pd.DataFrame:
+    """Add past-only temporal delta features within each measurement run.
+
+    Delta features capture how much each numeric feature changed relative to
+    earlier windows from the same run. This helps baseline models use temporal
+    change information without leaking information across runs or from future
+    windows.
+
+    Parameters
+    ----------
+    feature_table:
+        Window-level feature table.
+    group_column:
+        Column used to prevent deltas from crossing measurement runs.
+    order_column:
+        Time-like column used to order windows within each run.
+    lag:
+        Number of previous windows used for the difference.
+    suffix:
+        Optional suffix for generated columns. Defaults to ``delta_<lag>``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Feature table with additional delta columns.
+    """
+    if group_column not in feature_table.columns:
+        raise ValueError(f"Missing group column: {group_column}")
+
+    if order_column not in feature_table.columns:
+        raise ValueError(f"Missing order column: {order_column}")
+
+    if lag <= 0:
+        raise ValueError("lag must be positive.")
+
+    delta_suffix = suffix or f"delta_{lag}"
+
+    result = feature_table.copy()
+    original_order = result.index
+    result = result.sort_values([group_column, order_column]).copy()
+
+    numeric_columns = result.select_dtypes(include=["number"]).columns.tolist()
+    delta_columns = [
+        column
+        for column in numeric_columns
+        if column not in NON_DELTA_COLUMNS and not column.endswith(f"_{delta_suffix}")
+    ]
+
+    grouped = result.groupby(group_column, sort=False)
+
+    for column in delta_columns:
+        delta_column = f"{column}_{delta_suffix}"
+        result[delta_column] = grouped[column].diff(periods=lag).fillna(0.0)
+
+    return result.loc[original_order]
+
