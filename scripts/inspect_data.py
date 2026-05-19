@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from claas_stone_detection.io import read_dataset
+from claas_stone_detection.data.io import read_dataset
 
 
 def parse_args() -> argparse.Namespace:

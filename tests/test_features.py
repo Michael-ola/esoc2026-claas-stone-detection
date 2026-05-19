@@ -2,14 +2,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from claas_stone_detection.features import (
+from claas_stone_detection.streaming.features import (
     extract_frequency_features,
     extract_window_features,
     infer_sample_rate_hz,
     make_feature_table,
     zero_crossing_rate,
 )
-from claas_stone_detection.windowing import make_sliding_windows
+from claas_stone_detection.streaming.windowing import make_sliding_windows
 
 
 def make_feature_dataframe() -> pd.DataFrame:

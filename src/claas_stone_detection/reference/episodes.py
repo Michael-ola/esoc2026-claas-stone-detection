@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from claas_stone_detection.schema import DEFAULT_SCHEMA, ChannelSchema
+from claas_stone_detection.core.schema import DEFAULT_SCHEMA, ChannelSchema
 
 
 @dataclass(frozen=True)

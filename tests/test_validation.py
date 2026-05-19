@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from claas_stone_detection.validation import validate_measurement_dataframe
+from claas_stone_detection.core.validation import validate_measurement_dataframe
 
 
 def make_valid_measurement_dataframe() -> pd.DataFrame:

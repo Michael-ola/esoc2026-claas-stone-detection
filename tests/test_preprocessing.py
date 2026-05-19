@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from claas_stone_detection.preprocessing import normalize_status_column
+from claas_stone_detection.core.preprocessing import normalize_status_column
 
 
 def test_normalize_status_column_converts_bytes_values() -> None:

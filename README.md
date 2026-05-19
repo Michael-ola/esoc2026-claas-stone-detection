@@ -197,42 +197,42 @@ The event extraction should be treated as a candidate/reference event layer, not
 
 Load one MF4 file:
 
-    from claas_stone_detection.io import read_mf4
+    from claas_stone_detection.data.io import read_mf4
 
     df = read_mf4("data/Messung_2025-05-09_08-59-34.mf4")
     print(df.head())
 
 Load all runs:
 
-    from claas_stone_detection.io import read_dataset
+    from claas_stone_detection.data.io import read_dataset
 
     dataset = read_dataset("data", raster=0.001)
     print(dataset.keys())
 
 Use a custom data directory:
 
-    from claas_stone_detection.io import read_dataset
+    from claas_stone_detection.data.io import read_dataset
 
     dataset = read_dataset("../esoc2026-challenge-claas/data", raster=0.001)
     print(dataset.keys())
 
 Extract header-on episodes:
 
-    from claas_stone_detection.episodes import extract_header_on_episodes
+    from claas_stone_detection.reference.episodes import extract_header_on_episodes
 
     episodes = extract_header_on_episodes(df)
     print(episodes)
 
 Detect voltage reference events:
 
-    from claas_stone_detection.events import detect_voltage_events
+    from claas_stone_detection.reference.events import detect_voltage_events
 
     events = detect_voltage_events(df, run_name="example_run")
     print(events)
 
 Detect voltage reference events for all runs:
 
-    from claas_stone_detection.events import detect_voltage_events_in_dataset
+    from claas_stone_detection.reference.events import detect_voltage_events_in_dataset
 
     events_by_run = detect_voltage_events_in_dataset(dataset)
     print({run_name: len(events) for run_name, events in events_by_run.items()})

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from claas_stone_detection.io import list_mf4_files, read_dataset, read_mf4
+from claas_stone_detection.data.io import list_mf4_files, read_dataset, read_mf4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from claas_stone_detection.episodes import extract_header_on_episodes
+from claas_stone_detection.reference.episodes import extract_header_on_episodes
 
 
 def make_episode_dataframe(header_on: list[bool]) -> pd.DataFrame:

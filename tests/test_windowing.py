@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from claas_stone_detection.windowing import (
+from claas_stone_detection.streaming.windowing import (
     infer_sample_rate_hz_from_index,
     make_sliding_windows,
     slice_window,

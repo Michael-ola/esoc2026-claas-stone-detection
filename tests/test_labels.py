@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from claas_stone_detection.events import StoneEvent
-from claas_stone_detection.labels import (
+from claas_stone_detection.reference.events import StoneEvent
+from claas_stone_detection.reference.labels import (
     IGNORE_LABEL,
     NEGATIVE_LABEL,
     POSITIVE_LABEL,
@@ -10,7 +10,7 @@ from claas_stone_detection.labels import (
     label_window,
     label_windows,
 )
-from claas_stone_detection.windowing import SignalWindow
+from claas_stone_detection.streaming.windowing import SignalWindow
 
 
 def make_window(

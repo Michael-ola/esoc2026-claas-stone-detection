@@ -1,6 +1,6 @@
 import pandas as pd
 
-from claas_stone_detection.schema import DEFAULT_SCHEMA, ChannelSchema
+from claas_stone_detection.core.schema import DEFAULT_SCHEMA, ChannelSchema
 
 
 def validate_measurement_dataframe(

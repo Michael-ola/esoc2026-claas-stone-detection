@@ -3,9 +3,9 @@ from pathlib import Path
 import pandas as pd
 from asammdf import MDF
 
-from claas_stone_detection.preprocessing import normalize_status_column
-from claas_stone_detection.schema import DEFAULT_SCHEMA, ChannelSchema
-from claas_stone_detection.validation import validate_measurement_dataframe
+from claas_stone_detection.core.preprocessing import normalize_status_column
+from claas_stone_detection.core.schema import DEFAULT_SCHEMA, ChannelSchema
+from claas_stone_detection.core.validation import validate_measurement_dataframe
 
 
 def read_mf4(

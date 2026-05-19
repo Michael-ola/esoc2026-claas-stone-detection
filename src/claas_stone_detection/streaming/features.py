@@ -3,8 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from claas_stone_detection.schema import DEFAULT_SCHEMA, ChannelSchema
-from claas_stone_detection.windowing import SignalWindow, slice_window
+from claas_stone_detection.core.schema import DEFAULT_SCHEMA, ChannelSchema
+from claas_stone_detection.streaming.windowing import SignalWindow, slice_window
 
 
 @dataclass(frozen=True)

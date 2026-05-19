@@ -3,8 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from claas_stone_detection.episodes import Episode, extract_header_on_episodes
-from claas_stone_detection.schema import DEFAULT_SCHEMA, ChannelSchema
+from claas_stone_detection.core.schema import DEFAULT_SCHEMA, ChannelSchema
+from claas_stone_detection.reference.episodes import Episode, extract_header_on_episodes
 
 
 @dataclass(frozen=True)

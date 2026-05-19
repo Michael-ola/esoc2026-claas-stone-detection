@@ -3,8 +3,8 @@ import math
 import pandas as pd
 import pytest
 
-from claas_stone_detection.episodes import Episode
-from claas_stone_detection.events import (
+from claas_stone_detection.reference.episodes import Episode
+from claas_stone_detection.reference.events import (
     detect_voltage_events,
     detect_voltage_events_in_dataset,
     group_candidate_regions,

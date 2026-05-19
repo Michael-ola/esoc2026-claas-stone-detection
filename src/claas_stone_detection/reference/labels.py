@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from claas_stone_detection.events import StoneEvent
-from claas_stone_detection.windowing import SignalWindow
+from claas_stone_detection.reference.events import StoneEvent
+from claas_stone_detection.streaming.windowing import SignalWindow
 
 IGNORE_LABEL = -1
 NEGATIVE_LABEL = 0

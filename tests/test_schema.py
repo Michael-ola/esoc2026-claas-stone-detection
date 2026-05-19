@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from claas_stone_detection.schema import DEFAULT_SCHEMA
+from claas_stone_detection.core.schema import DEFAULT_SCHEMA
 
 
 def test_default_schema_contains_expected_raw_channels() -> None:
